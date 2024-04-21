@@ -7,7 +7,7 @@ nltk.download('punkt')
 
 # Function to read documents from .txt files
 
-punctuations = ":(){}[],.';/"
+punctuations = '''!()-[]{};:'"\,<>./?#%^*_~'''
 
 
 def read_documents_from_directory(directory):
@@ -117,7 +117,7 @@ term_frequencies_title = calculate_term_frequencies(titles)
 print("NNN")
 print()
 for term, doc_freq in df.items():
-    print(f"term '{term} has document frequency as '{doc_freq}'")
+    print(f"term '{term}' has document frequency as '{doc_freq}'")
     break
 
 for doc_name, normalized_terms in term_frequencies_docs.items():
@@ -134,12 +134,12 @@ print("NTN")
 print("Only the Document frequency changes for this:")
 t_df = normalize_ntn(total_docs)
 for term, doc_freq in t_df.items():
-    print(f"term '{term} has document frequency as '{doc_freq}'")
+    print(f"term '{term}' has document frequency as '{doc_freq}'")
     break
 
 print("NTC")
 print("Only the vector will be cosine normalize")
 normalized_ntc = normalize_c(term_frequencies_docs)
-for doc_term, normalized_ter in normalized_ntc:
-    print(f"'{doc_term} has normalized vector as '{normalized_ter}'")
+for doc_term, normalized_ter in normalized_ntc.items():
+    print(f"'{doc_term}' has normalized vector as '{normalized_ter}'")
     break
