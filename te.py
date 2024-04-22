@@ -1,31 +1,13 @@
-with open('nfcorpus/raw/nfdump.txt' , 'r' , encoding= "utf-8") as file:
-    for line in file:
-        l = line.split('\t')
-        print(len(l))
-        doc_no, url, title, maintext, comments, topics_tags, description, doctors_note, article_links, question_links, topic_links, video_links, medarticle_links = [l[i] for i in range(0, 13)]
-        print(doc_no)
-        print()
-        print(url)
-        print()
-        print(title)
-        print()
-        print(maintext)
-        print()
-        print(comments)
-        print()
-        print(topics_tags)
-        print()
-        print(description)
-        print()
-        print(doctors_note)
-        print()
-        print(article_links)
-        print()
-        print(question_links)
-        print()
-        print(topic_links)
-        print()
-        print(video_links)
-        print()
-        print(medarticle_links)
-        break
+import pysolr
+solr = pysolr.Solr('http://localhost:8983/solr/localDocs')
+# with open('nfcorpus/raw/doc_dump.txt', 'r', encoding='utf-8') as file:
+#     for l in file:
+#         line = l.split('\t')
+#         ID, URL, TITLE, ABSTRACT = [line[i] for i in range(0, 4)]
+#         doc = {
+#             'id': ID,
+#             'URL': URL,
+#             'Title': TITLE,
+#             'Abstract': ABSTRACT
+#         }
+#         solr.add([doc])

@@ -15,21 +15,17 @@ def read_documents_from_directory(directory):
     titles = {}
     count = 0
     for filename in os.listdir(directory):
-        if filename.endswith("doc_dump.txt"):
+        if filename.endswith("nfdump.txt"):
             with open(os.path.join(directory, filename), "r", encoding="utf-8") as file:
                 lines = file.readlines()
                 for line in lines:
                     count += 1
                     # Split the line into document name and content, ignoring the website
-                    parts = line.strip().split('\t')
-                    if (parts[0] == 'MED-5371'):
-                        doc_num, link, title, content = parts[0], parts[1], parts[2], parts[3]
-                        documents[doc_num] = content
-                        titles[doc_num] = title
-                    else:
-                        doc_num, link, title, content = parts[0], parts[1], parts[2], parts[3]
-                        documents[doc_num] = content
-                        titles[doc_num] = title
+                    parts = line.split('\t')
+                    doc_no, url, title, mainText, comments, topics_tags, description, doctors_note, article_links, question_links, topic_links, video_links, medarticle_links = [
+                        parts[i] for i in range(0, 13)]
+                    documents[doc_no] = description
+                    titles[doc_no] = title
 
     return documents, titles, count
 
