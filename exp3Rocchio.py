@@ -2,27 +2,24 @@ import pysolr
 import numpy as np
 import re
 from collections import Counter
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 
 solr = pysolr.Solr('http://localhost:8983/solr/localDocs')
-non_relevant_docs = set("MED-" + str(i) for i in range(1, 5372))
-relevant_docs = set()
-with open('nfcorpus\merged.qrel', 'r', encoding='utf-8') as file:
-    for l in file:
-        line = l.split('\t')
-        if line[2] in non_relevant_docs:
-            relevant_docs.add(line[2])
-            non_relevant_docs.remove(line[2])
+all_docs = set("MED-" + str(i) for i in range(1, 5372))
 
 
 def preprocess_text(text):
     text = text.lower()
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
-    return text
+    tokens = word_tokenize(text)
+    stop_words = set(stopwords.words('english'))
+    tokens = [word for word in tokens if word.lower() not in stop_words]
+    return tokens
 
 
 def term_frequency(text):
-    text = preprocess_text(text)
-    tokens = text.split()
+    tokens = preprocess_text(text)
     term_freq = Counter(tokens)
     return term_freq
 
@@ -84,19 +81,42 @@ def rocchio_algorithm(original_query_vector, relevant_docs, non_relevant_docs, a
 
     updated_query_vector = {}
     for word, freq in original_query_vector.items():
-        updated_query_vector[word] = freq
+        updated_query_vector[word] = alpha*freq
     for word, freq in centroid_relevant.items():
-        updated_query_vector[word] = updated_query_vector.get(word, 0) + freq
+        updated_query_vector[word] = updated_query_vector.get(
+            word, 0) + beta*freq
     for word, freq in centroid_non_relevant.items():
-        updated_query_vector[word] = updated_query_vector.get(word, 0) - freq
+        updated_query_vector[word] = updated_query_vector.get(
+            word, 0) - gamma*freq
 
     updated_query_vector = {word: freq for word,
-                            freq in updated_query_vector.items() if freq >= 0.009}
+                            freq in updated_query_vector.items() if freq >= 0.07}
     return updated_query_vector
 
 
-original_query_vector = {'how': 1, 'contaminated': 1}
+qdMapping = {}
+with open('nfcorpus\merged.qrel', 'r', encoding='utf-8') as file:
+    for l in file:
+        line = l.split('\t')
+        if line[0] not in qdMapping.keys():
+            qdMapping[line[0]] = [line[2]]
+        else:
+            qdMapping[line[0]].append(line[2])
 
-updated_query_vector = rocchio_algorithm(
-    original_query_vector, relevant_docs, non_relevant_docs)
-print(updated_query_vector)
+with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
+    for l in file:
+        line = l.split('\t')
+        if line[0] in qdMapping.keys():
+            relevant_docs = qdMapping[line[0]]
+            non_relevant_docs = all_docs
+            for doc in relevant_docs:
+                if doc in non_relevant_docs:
+                    non_relevant_docs.remove(doc)
+            updated_query_vector = rocchio_algorithm(
+                term_frequency(line[1]), relevant_docs, non_relevant_docs)
+
+            print(updated_query_vector)
+        else:
+            print("Not in qrel")
+        print()
+        print()
