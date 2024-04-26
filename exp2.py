@@ -15,7 +15,7 @@ def read_documents_from_directory(directory):
     titles = {}
     count = 0
     for filename in os.listdir(directory):
-        if filename.endswith("nfdump.txt"):
+        if filename.endswith("doc_dump.txt"):
             with open(os.path.join(directory, filename), "r", encoding="utf-8") as file:
                 lines = file.readlines()
                 for line in lines:
@@ -100,14 +100,9 @@ def normalize_ntn(total_docs):
     return t_df
 
 
-# Directory containing .txt files
 directory = "./nfcorpus/raw"
-
-# Read documents from .txt files in the specified directory
 documents, titles, total_docs = read_documents_from_directory(directory)
 df = getDocFreq()
-
-# Calculate term frequencies in documents
 term_frequencies_docs = calculate_term_frequencies(documents)
 term_frequencies_title = calculate_term_frequencies(titles)
 print("NNN")
