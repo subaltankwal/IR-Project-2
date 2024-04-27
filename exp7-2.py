@@ -5,6 +5,7 @@ from itertools import chain
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import ndcg_score
+import math
 
 def escape_special_characters(query):
     punctuations = '''!()-[]{};:'"\,<>./?#%^*_~'''
@@ -20,7 +21,7 @@ def calculate_cosine_similarity(query_vector, document_vectors):
 def cosines(query , field):
     solr = pysolr.Solr('http://localhost:8983/solr/localDocs', timeout=10)
 
-    results = solr.search(f'{field}:{query}', rows=100)
+    results = solr.search(f'{field}:{query}', rows=10000)
     if not results:
         return {}
     document_ids = [doc['id'] for doc in results]
@@ -89,12 +90,17 @@ def pair_documents(features, relevance_labels):
 
 def write_predictions_to_file(predictions, qid, doc_ids, output_file):
     combined = list(zip(predictions, qid, doc_ids))
-    sorted_combined = sorted(combined, key=lambda x: x[0], reverse=True)
-    with open(output_file, 'w', encoding='utf-8') as file:
-        count = 1
-        for item in sorted_combined:
-            file.write(f"{item[1]}\t0\t{item[2]}\t{count}\t{item[0]}\tExp-7\n")
-            count += 1
+    for item in combined:
+        with open(output_file, 'w', encoding='utf-8') as file:
+            temp = "XYZ"
+            count = 1
+            for item in combined:
+                if(temp != item[1]):
+                    count = 1
+                else:
+                    count += 1
+                file.write(f"{item[1]}\t0\t{item[2]}\t{count}\t{item[0]}\tExp-7\n")
+                temp = item[1]
 
 def nn_model(train_features , train_relevance_labels, dev_features, dev_relevance_labels,output_file):
     train_paired_features, train_paired_labels = pair_documents(train_features, train_relevance_labels)
@@ -142,26 +148,55 @@ def load_ground_truth(file_path):
     gt_relevance = {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
-            query_id, _, doc_id, rel_score = line.strip().split('\t')
-            gt_relevance.setdefault(query_id, {})[doc_id] = int(rel_score)
+            query_id, _, doc_id, rel_score = line.split('\t')
+            gt_relevance[(query_id, doc_id)] = int(rel_score)
     return gt_relevance
 
 def load_predicted_rankings(file_path):
     predicted_rankings = {}
     with open(file_path, 'r', encoding='utf-8') as file:
         for line in file:
-            query_id, _, doc_id, rank, score, _ = line.strip().split('\t')
-            predicted_rankings.setdefault(query_id, []).append((doc_id, float(score)))
+            query_id, _, doc_id, _ ,  score, _ = line.split('\t')
+            score = float(score)
+            if predicted_rankings.get(query_id):
+                predicted_rankings[query_id] += [(doc_id , score)]
+            else:
+                predicted_rankings[query_id] = [(doc_id , score)]
+    for query_id in predicted_rankings:
+        predicted_rankings[query_id] = sorted(predicted_rankings[query_id], key=lambda x: x[1], reverse=True)
     return predicted_rankings
 
 def calculate_ndcg(gt_relevance, predicted_rankings):
     ndcg_scores = []
     for query_id, ranked_list in predicted_rankings.items():
-        ground_truth = [gt_relevance[query_id].get(doc_id, 0) for doc_id, _ in ranked_list]
+        ground_truth = [gt_relevance.get((query_id, doc_id), 0) for doc_id, _ in ranked_list]
         predicted_scores = [score for _, score in ranked_list]
-        ndcg = ndcg_score([ground_truth], [predicted_scores], k=len(ranked_list))
-        ndcg_scores.append(ndcg)
-    avg_ndcg = sum(ndcg_scores) / len(ndcg_scores)
+        ndcg_score = [ground_truth[0]]
+        ideal_ndcg_score = []
+        for doc_id , _ in ranked_list:
+            ideal_ndcg_score.append((doc_id , gt_relevance.get((query_id , doc_id) , 0)))
+        ideal_ndcg_score = sorted(ideal_ndcg_score, key=lambda x: x[1], reverse=True)
+
+        final_ideal = []
+
+        for i in range (1, len(ground_truth)):
+            ndcg_score.append((ground_truth[i])/math.log2(i+1))
+
+        for i in range (0,len(ideal_ndcg_score)):
+            if i == 0:
+                final_ideal.append(ideal_ndcg_score[i][1])
+            else:
+                final_ideal.append((ideal_ndcg_score[i][1])/math.log2(i+1))
+
+        # ndcg = ndcg_score([ground_truth], [predicted_scores], k=len(ranked_list))
+        # ndcg_scores.append(ndcg)
+        if sum(final_ideal) == 0:
+            ndcg_score_for_query = 0
+        else:
+            ndcg_score_for_query = sum(ndcg_score)/sum(final_ideal)
+        ndcg_scores.append(ndcg_score_for_query)
+        print(f"The NDCG score for {query_id} is: {ndcg_score_for_query}\n")
+    avg_ndcg = sum(ndcg_scores)/len(ndcg_scores)
     return avg_ndcg
 
 gt_relevance = load_ground_truth('nfcorpus/merged.qrel')

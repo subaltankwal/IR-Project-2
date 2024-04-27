@@ -4,9 +4,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 from itertools import chain
 import numpy as np
 import tensorflow as tf
-import tensorflow_ranking as tfr
-from sklearn.metrics import ndcg_score
 import math
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk import FreqDist
+
+solr = pysolr.Solr('http://localhost:8983/solr/localDocs', timeout=10)
 
 def escape_special_characters(query):
     punctuations = '''!()-[]{};:'"\,<>./?#%^*_~'''
@@ -15,29 +18,20 @@ def escape_special_characters(query):
             query = query.replace(x , "")
     return query
 
+def preprocess_text(text):
+    if isinstance(text, list):
+        text = ' '.join(text)
+    tokens = word_tokenize(text)
+    stop_words = set(stopwords.words('english'))
+    tokens = [word for word in tokens if word.lower() not in stop_words]
+    return tokens
+
 def calculate_cosine_similarity(query_vector, document_vectors):
     cosine_similarities = cosine_similarity(query_vector, document_vectors)
 
     return cosine_similarities[0]
 
-# def size_ratio(query):
-#     solr = pysolr.Solr('http://localhost:8983/solr/localDocs', timeout=10)
-#     results = solr.search(f'{"Title"}:{query}', rows=100)
-#     title_length_with_ids = {}
-#     if results:
-#         for doc in results:
-#             title_length_with_ids[doc['id']] = (len(doc['Title'])/len(query))
-
-#     results1 = solr.search(f'{"Abstract"}:{query}', rows=100)
-#     abstract_length_with_ids = {}
-#     if results1:
-#         for doc in results:
-#             abstract_length_with_ids[doc['id']] = (len(doc['Abstract'])/len(query))
-
-#     return title_length_with_ids , abstract_length_with_ids
-    
 def cosines_and_ratio(query , field):
-    solr = pysolr.Solr('http://localhost:8983/solr/localDocs', timeout=10)
 
     results = solr.search(f'{field}:{query}', rows=10000)
     if not results:
@@ -63,11 +57,50 @@ def cosines_and_ratio(query , field):
     # print(f"the dict with field {field} is {cosine_scores_with_ids}")
     return cosine_scores_with_ids , ratio_with_ids
 
+def calculate_bm25(query, doc, doc_len, avg_doc_len, doc_freq, N):
+    k1 = 1.5
+    b = 0.75
+    K = k1 * ((1 - b) + b * (doc_len / avg_doc_len))
+    score = 0
+    for term in query:
+        if term in doc_freq:
+            idf = math.log(
+                (N - doc_freq[term] + 0.5) / (doc_freq[term] + 0.5) + 1)
+            tf = doc.count(term)
+            score += idf * ((tf * (k1 + 1)) / (tf + K))
+    return score
+
+def bm25(query , field):
+    results = solr.search(f'{field}:{query}', rows=10000)
+    
+    if len(results) == 0:
+        return {}
+
+    query_tokens = preprocess_text(query)
+    avg_doc_len = sum(len(doc[field]) for doc in results) / len(results)
+
+    doc_freq = FreqDist(
+        [token for doc in results for token in preprocess_text(doc[field])])
+    N = len(results)
+
+    ranked_results = {}
+    for doc in results:
+        doc_text = preprocess_text(doc[field])
+        doc_len = len(doc_text)
+        bm25_score = calculate_bm25(
+            query_tokens, doc_text, doc_len, avg_doc_len, doc_freq, N)
+        ranked_results[doc['id']] = bm25_score
+
+    return ranked_results
+
+
 def features_and_labels(query):
     qid , qtext = query.split('\t')
     esc_qtext = escape_special_characters(qtext)
     cosine_score_with_titles , title_ratio = cosines_and_ratio(esc_qtext , "Title")
     cosine_score_with_abstract , abstract_ratio = cosines_and_ratio(esc_qtext , "Abstract")
+    bm25_scores_with_titles = bm25(esc_qtext , "Title")
+    bm25_scores_with_abstract = bm25(esc_qtext , "Abstract")
     # print(f" {qid} : {cosine_score_with_abstract}")
 
     features = []
@@ -75,11 +108,15 @@ def features_and_labels(query):
         feature = []
         value1 = cosine_score_with_titles.get(key , 0)
         value2 = cosine_score_with_abstract.get(key , 0)
+        value3 = bm25_scores_with_titles.get(key , 0)
+
         # value3 = title_ratio.get(key , 0)
         # value4 = abstract_ratio.get(key , 0)
-        # feature = [qid , key , value1 , value2 , value3 , value4]
-        feature = [qid , key , value1 , value2]
+        feature = [qid , key , value1 , value2 , value3]
+        # feature = [qid , key , value1 , value2]
         features.append(feature)
+
+    # print(features)
 
     given_relevance_labels = {}
     with open('nfcorpus/merged.qrel' , 'r' , encoding='utf-8') as file:
@@ -126,7 +163,6 @@ def write_predictions_to_file(predictions, qid, doc_ids, output_file):
                 temp = item[1]
 
 
-
 def nn_model(train_features , train_relevance_labels, dev_features, dev_relevance_labels,output_file):
     # if not train_features:
     #     X_train = np.array([0,0])
@@ -141,7 +177,7 @@ def nn_model(train_features , train_relevance_labels, dev_features, dev_relevanc
     # print(Y_train)
 
     model = tf.keras.Sequential([
-    tf.keras.layers.Dense(64, activation='relu', input_shape=(2,)),
+    tf.keras.layers.Dense(64, activation='relu', input_shape=(3,)),
     tf.keras.layers.Dense(32, activation='relu'),
     tf.keras.layers.Dense(1) ])
     model.compile(optimizer='adam', loss="mean_squared_error")
@@ -174,7 +210,7 @@ with open('nfcorpus/dev.titles.queries', 'r' , encoding='utf-8') as file:
         dev_feat += temp_features
         dev_rel += temp_rel
         
-nn_model(train_feat , train_rel , dev_feat , dev_rel ,'rel_out.txt')
+nn_model(train_feat , train_rel , dev_feat , dev_rel ,'rel3_out.txt')
 
 def load_ground_truth(file_path):
     gt_relevance = {}
