@@ -4,6 +4,7 @@ import re
 from collections import Counter
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from exp2temp import getNTCforexp3
 
 solr = pysolr.Solr('http://localhost:8983/solr/localDocs')
 all_docs = set("MED-" + str(i) for i in range(1, 5372))
@@ -90,33 +91,22 @@ def rocchio_algorithm(original_query_vector, relevant_docs, non_relevant_docs, a
             word, 0) - gamma*freq
 
     updated_query_vector = {word: freq for word,
-                            freq in updated_query_vector.items() if freq >= 0.07}
+                            freq in updated_query_vector.items() if freq >= 0.05 and word != 'pubmed' and word != 'ncbi'}
     return updated_query_vector
 
-
-qdMapping = {}
-with open('nfcorpus\merged.qrel', 'r', encoding='utf-8') as file:
-    for l in file:
-        line = l.split('\t')
-        if line[0] not in qdMapping.keys():
-            qdMapping[line[0]] = [line[2]]
-        else:
-            qdMapping[line[0]].append(line[2])
 
 with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
     for l in file:
         line = l.split('\t')
-        if line[0] in qdMapping.keys():
-            relevant_docs = qdMapping[line[0]]
-            non_relevant_docs = all_docs
-            for doc in relevant_docs:
-                if doc in non_relevant_docs:
-                    non_relevant_docs.remove(doc)
-            updated_query_vector = rocchio_algorithm(
-                term_frequency(line[1]), relevant_docs, non_relevant_docs)
-
-            print(updated_query_vector)
-        else:
-            print("Not in qrel")
+        relevant_docs = getNTCforexp3()[:79]
+        non_relevant_docs = all_docs
+        for doc in relevant_docs:
+            if doc in non_relevant_docs:
+                non_relevant_docs.remove(doc)
+        updated_query_vector = rocchio_algorithm(
+            term_frequency(line[1]), relevant_docs, non_relevant_docs)
+        print(line[1])
+        print(updated_query_vector)
         print()
         print()
+        # break
