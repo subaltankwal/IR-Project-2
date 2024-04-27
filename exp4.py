@@ -7,6 +7,13 @@ import math
 solr = pysolr.Solr('http://localhost:8983/solr/localDocs', timeout=10)
 
 
+def escape_special_characters(query):
+    punctuations = '''!()-[]{};:'"\,<>./?#%^*_~'''
+    for x in query:
+        if x in punctuations:
+            query = query.replace(x , "")
+    return query
+
 def preprocess_text(text):
     if isinstance(text, list):
         text = ' '.join(text)
@@ -46,8 +53,9 @@ def calculate_language_model(query, doc, doc_len, collection_freq, mu):
 
 
 def search_with_bm25(query):
-    results = solr.search(f"Title:{query}", rows=200)
-
+    escaped_query = escape_special_characters(query)
+    results = solr.search(f"Title:{escaped_query}" , rows= 200)
+    
     if len(results) == 0:
         return []
 
@@ -72,7 +80,8 @@ def search_with_bm25(query):
 
 
 def search_with_language_model(query):
-    results = solr.search(f"Title:{query}", rows=200)
+    escaped_query = escape_special_characters(query)
+    results = solr.search(f"Title:{escaped_query}" , rows= 200)
 
     query_tokens = preprocess_text(query)
 
