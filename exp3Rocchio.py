@@ -94,19 +94,19 @@ def rocchio_algorithm(original_query_vector, relevant_docs, non_relevant_docs, a
                             freq in updated_query_vector.items() if freq >= 0.05 and word != 'pubmed' and word != 'ncbi'}
     return updated_query_vector
 
-
-with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
-    for l in file:
-        line = l.split('\t')
-        relevant_docs = getNTCforexp3()[:79]
-        non_relevant_docs = all_docs
-        for doc in relevant_docs:
-            if doc in non_relevant_docs:
-                non_relevant_docs.remove(doc)
-        updated_query_vector = rocchio_algorithm(
-            term_frequency(line[1]), relevant_docs, non_relevant_docs)
-        print(line[1])
-        print(updated_query_vector)
-        print()
-        print()
+if __name__ == '__main__':
+    with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
+        for l in file:
+            line = l.split('\t')
+            relevant_docs = getNTCforexp3()[:79]
+            non_relevant_docs = all_docs
+            for doc in relevant_docs:
+                if doc in non_relevant_docs:
+                    non_relevant_docs.remove(doc)
+            updated_query_vector = rocchio_algorithm(
+                term_frequency(line[1]), relevant_docs, non_relevant_docs)
+            print(line[1])
+            print(updated_query_vector)
+            print()
+            print()
         # break

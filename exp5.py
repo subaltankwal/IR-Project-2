@@ -39,6 +39,7 @@ def getRankedList(query, entity_list):
             for l in file:
                 line = l.split('\t')
                 id, link, title, abstract = line
+                print(type(title))
                 docEntities = bag_of_entities(title, entity_list)
                 docScore = 0
                 for term, freq in queryEntities.items():
@@ -58,9 +59,10 @@ def getRankedList(query, entity_list):
             print()
 
 
-entity_list = getAllEntity()
-with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
-    for l in file:
-        line = l.split('\t')
-        getRankedList(
-            line[1], entity_list)
+if __name__ == '__main__':
+    entity_list = getAllEntity()
+    with open('nfcorpus/train.titles.queries', 'r', encoding='utf-8') as file:
+        for l in file:
+            line = l.split('\t')
+            getRankedList(
+                line[1], entity_list)
